@@ -227,15 +227,9 @@ Três técnicas complementares de data mining foram aplicadas sequencialmente pa
 
 **Determinação de k ótimo**: Empregou-se abordagem dual:
 
-1. **Método Elbow**: Análise visual de inércia $I(k) = \sum_{j=1}^{k}\sum_{x \in C_j}||x - \mu_j||^2$ para $k \in [2, 10]$, identificando ponto de inflexão (elbow) onde adição de clusters apresenta retornos marginais decrescentes.
+1. **Método Elbow**: Análise visual de inércia para k variando de 2 a 10, identificando ponto de inflexão (elbow) onde adição de clusters apresenta retornos marginais decrescentes. A inércia mede a soma das distâncias quadráticas de cada ponto ao centroide de seu cluster.
 
-2. **Silhouette Score**: Métrica de validação interna quantificando qualidade dos clusters:
-
-$$
-S = \frac{1}{n}\sum_{i=1}^{n}\frac{b_i - a_i}{\max(a_i, b_i)}
-$$
-
-onde $a_i$ é distância intra-cluster média e $b_i$ é distância inter-cluster mínima. Valores $S \in (0.25, 0.50]$ indicam estrutura moderadamente definida.
+2. **Silhouette Score**: Métrica de validação interna quantificando qualidade dos clusters. O score é calculado como a média da diferença entre a distância inter-cluster mínima e a distância intra-cluster média, normalizada pelo valor máximo entre ambas. Valores entre 0.25 e 0.50 indicam estrutura moderadamente definida.
 
 **Configuração Final**:
 
@@ -244,67 +238,58 @@ KMeans(n_clusters=4, init='k-means++', n_init=10,
        max_iter=300, random_state=42)
 ```
 
-Análise convergiu para $k^* = 4$ clusters (Silhouette Score = 0.42), interpretados como: (0) volatilidade baixa/neutra, (1) volatilidade alta/positiva, (2) volatilidade alta/negativa, (3) consolidação.
+Análise convergiu para k=4 clusters (Silhouette Score = 0.42), interpretados como: (0) volatilidade baixa/neutra, (1) volatilidade alta/positiva, (2) volatilidade alta/negativa, (3) consolidação.
 
 #### 3.4.2. Classificação Supervisionada de Direção de Movimento
 
 **Algoritmo**: Random Forest Classifier [Breiman 2001], ensemble de árvores de decisão CART com bagging.
 
-**Formulação do Problema**: Classificação binária $f: \mathbb{R}^{11} \rightarrow \{0, 1\}$ mapeando vetor de features $X_t$ para classe $y_t \in \{Alta, Queda\}$.
+**Formulação do Problema**: Classificação binária mapeando vetor de 11 features para classe binária (Alta ou Queda).
 
-**Conjunto de Features**: $X_{class} = \{open, high, low, close, volume, return, SMA_7, SMA_30, volatilidade_{7d}, RSI_{14}, cluster\}$.
+**Conjunto de Features**: open, high, low, close, volume, return, SMA_7, SMA_30, volatilidade_7d, RSI_14, cluster.
 
 **Configuração de Hiperparâmetros**:
 
-| Parâmetro           | Valor      | Justificativa                                                         |
-| ------------------- | ---------- | --------------------------------------------------------------------- |
-| `n_estimators`      | 100        | Compromisso entre performance e custo computacional                   |
-| `max_depth`         | 10         | Regularização para prevenir overfitting                               |
-| `min_samples_split` | 5          | Evitar divisões em folhas muito pequenas                              |
-| `min_samples_leaf`  | 2          | Garantir robustez estatística em nós terminais                        |
-| `class_weight`      | 'balanced' | Compensar desbalanceamento leve entre classes (~52% alta, ~48% queda) |
-| `random_state`      | 42         | Reprodutibilidade experimental                                        |
+| Parâmetro         | Valor    | Justificativa                                                         |
+| ----------------- | -------- | --------------------------------------------------------------------- |
+| n_estimators      | 100      | Compromisso entre performance e custo computacional                   |
+| max_depth         | 10       | Regularização para prevenir overfitting                               |
+| min_samples_split | 5        | Evitar divisões em folhas muito pequenas                              |
+| min_samples_leaf  | 2        | Garantir robustez estatística em nós terminais                        |
+| class_weight      | balanced | Compensar desbalanceamento leve entre classes (~52% alta, ~48% queda) |
+| random_state      | 42       | Reprodutibilidade experimental                                        |
 
 **Métricas de Avaliação**:
 
-- **Accuracy**: $Acc = \frac{TP + TN}{TP + TN + FP + FN}$
-- **Precision**: $Prec = \frac{TP}{TP + FP}$
-- **Recall (Sensitivity)**: $Rec = \frac{TP}{TP + FN}$
-- **F1-Score**: $F_1 = 2 \cdot \frac{Prec \cdot Rec}{Prec + Rec}$
-- **Confusion Matrix**: Matriz $2 \times 2$ de contagens [TN, FP; FN, TP]
+- **Accuracy**: Proporção de predições corretas sobre o total de predições
+- **Precision**: Proporção de predições positivas que são realmente positivas
+- **Recall (Sensitivity)**: Proporção de casos positivos reais que foram corretamente identificados
+- **F1-Score**: Média harmônica entre Precision e Recall, balanceando ambas as métricas
+- **Confusion Matrix**: Matriz 2×2 de contagens [TN, FP; FN, TP] onde TN=True Negative, FP=False Positive, FN=False Negative, TP=True Positive
 
 #### 3.4.3. Regressão para Previsão de Valor Exato
 
-**Formulação do Problema**: Regressão $g: \mathbb{R}^{11} \rightarrow \mathbb{R}^+$ estimando preço futuro $\hat{y}_t = Close_{t+1}$.
+**Formulação do Problema**: Regressão estimando preço futuro baseado em 11 features preditoras.
 
 **Modelos Implementados**:
 
 **1. Random Forest Regressor** (modelo principal):
 
-```python
-RandomForestRegressor(n_estimators=100, max_depth=15,
-                      min_samples_split=5, random_state=42)
-```
-
-Agregação por média aritmética das predições de 100 árvores independentes. `max_depth=15` (maior que classificação) permite capturar relações não-lineares mais complexas necessárias para estimação numérica precisa.
+Ensemble de 100 árvores de decisão com profundidade máxima de 15 níveis e mínimo de 5 amostras para divisão de nós. Agregação por média aritmética das predições de 100 árvores independentes. A profundidade máxima de 15 (maior que classificação) permite capturar relações não-lineares mais complexas necessárias para estimação numérica precisa.
 
 **2. Linear Regression** (baseline):
 
-```python
-LinearRegression(fit_intercept=True, normalize=False)
-```
-
-Modelo paramétrico simples: $\hat{y} = \beta_0 + \sum_{j=1}^{11}\beta_j X_j$. Coeficientes $\beta$ estimados por mínimos quadrados ordinários (OLS).
+Modelo paramétrico simples que estabelece relação linear entre a variável dependente e as 11 features preditoras. Coeficientes estimados por mínimos quadrados ordinários (OLS) com intercepto.
 
 **Métricas de Avaliação**:
 
-- **MAE (Mean Absolute Error)**: $MAE = \frac{1}{n}\sum_{i=1}^{n}|y_i - \hat{y}_i|$ - erro médio absoluto em USDT
-- **RMSE (Root Mean Squared Error)**: $RMSE = \sqrt{\frac{1}{n}\sum_{i=1}^{n}(y_i - \hat{y}_i)^2}$ - penaliza desvios grandes
-- **R² Score**: $R^2 = 1 - \frac{SS_{res}}{SS_{tot}} = 1 - \frac{\sum(y_i - \hat{y}_i)^2}{\sum(y_i - \bar{y})^2}$ - proporção de variância explicada
+- **MAE (Mean Absolute Error)**: Média das diferenças absolutas entre valores reais e preditos, expressa em USDT
+- **RMSE (Root Mean Squared Error)**: Raiz quadrada da média dos erros quadráticos, penalizando desvios grandes mais fortemente que o MAE
+- **R² Score**: Coeficiente de determinação que indica a proporção da variância dos dados explicada pelo modelo, variando de 0 a 1
 
 ### 3.5. Fase 5: Validação e Avaliação
 
-**Particionamento Temporal**: Train-test split com proporção 80%-20% preservando ordem cronológica (`shuffle=False`). Dados de treino: 01/2019-06/2024 (2.004 dias); dados de teste: 07/2024-12/2025 (501 dias).
+**Particionamento Temporal**: Train-test split com proporção 80%-20% preservando ordem cronológica sem embaralhamento. Dados de treino: 01/2019-06/2024 (2.004 dias); dados de teste: 07/2024-12/2025 (501 dias).
 
 **Justificativa**: Em séries temporais, validação temporal evita data leakage (vazamento de informação do futuro para o passado), simulando condição realista onde modelo treinado em dados históricos é testado em período subsequente nunca visto.
 
@@ -347,15 +332,15 @@ _Heatmap colorido (azul-vermelho) mostrando correlações [-1, +1]. Destaques: C
 
 **Interpretação de Correlações**:
 
-- **Alta correlação OHLC** (ρ > 0.99): Esperada matematicamente, mas SMA_30 vs. Close (ρ=0.987) indica forte colinearidade que não prejudica Random Forest (invariante a multicolinearidade).
-- **Volume-Volatilidade** (ρ=0.342): Correlação moderada positiva confirma que períodos de alta liquidez associam-se a maior dispersão de retornos.
-- **RSI-Return** (ρ=0.456): Correlação moderada esperada dado que RSI é derivado de retornos.
+- **Alta correlação OHLC** (r > 0.99): Esperada matematicamente, mas SMA_30 vs. Close (r=0.987) indica forte colinearidade que não prejudica Random Forest (invariante a multicolinearidade).
+- **Volume-Volatilidade** (r=0.342): Correlação moderada positiva confirma que períodos de alta liquidez associam-se a maior dispersão de retornos.
+- **RSI-Return** (r=0.456): Correlação moderada esperada dado que RSI é derivado de retornos.
 
 **Figura 3. Distribuição de Retornos Diários com Ajuste de Distribuição Normal**
 
-_Histograma (50 bins) sobreposto com curva normal teórica (μ=0.0021, σ=0.0487). Observa-se concentração central com caudas significativamente mais pesadas que distribuição gaussiana. Q-Q plot no insert superior direito revela desvios nas caudas._
+_Histograma (50 bins) sobreposto com curva normal teórica (média=0.0021, desvio padrão=0.0487). Observa-se concentração central com caudas significativamente mais pesadas que distribuição gaussiana. Q-Q plot no insert superior direito revela desvios nas caudas._
 
-**Teste de Normalidade**: Shapiro-Wilk (W=0.9245, p < 0.001) e Kolmogorov-Smirnov (D=0.089, p < 0.001) rejeitam hipótese de normalidade. Identificados 89 outliers (3,6% das observações) com |Return| > 3σ, correspondentes a eventos de mercado significativos (ex: crash COVID-19 março/2020, rally DeFi 2021).
+**Teste de Normalidade**: Shapiro-Wilk (W=0.9245, p < 0.001) e Kolmogorov-Smirnov (D=0.089, p < 0.001) rejeitam hipótese de normalidade. Identificados 89 outliers (3,6% das observações) com retorno absoluto superior a 3 desvios padrão, correspondentes a eventos de mercado significativos (ex: crash COVID-19 março/2020, rally DeFi 2021).
 
 ### 4.2. Descoberta de Padrões via Clustering Não Supervisionado
 
@@ -377,11 +362,11 @@ _Dois painéis: (esquerda) Gráfico de inércia vs. k ∈ [2,10] mostrando decai
 | 5     | 1.034,12     | 0,387            | 0,945                | 698,23                  |
 | 6     | 892,67       | 0,361            | 1,012                | 671,45                  |
 
-**Justificativa**: k=4 otimiza Silhouette Score (0,418) indicando separação moderadamente boa, minimiza Davies-Bouldin Index (0,892 < 1 desejável) e maximiza Calinski-Harabasz Score (maior = clusters mais densos e separados). Convergência em 14 iterações (critério: Δcentroides < 10⁻⁴).
+**Justificativa**: k=4 otimiza Silhouette Score (0,418) indicando separação moderadamente boa, minimiza Davies-Bouldin Index (0,892, valor inferior a 1 é desejável) e maximiza Calinski-Harabasz Score (maior valor indica clusters mais densos e separados). Convergência em 14 iterações.
 
 **Figura 5. Visualização dos Clusters no Espaço Retorno × Volatilidade**
 
-_Scatter plot 2D com 2.505 pontos coloridos por cluster: Cluster 0 (azul, n=687), Cluster 1 (vermelho, n=534), Cluster 2 (verde, n=621), Cluster 3 (amarelo, n=663). Centroides marcados com 'X' preto. Elipses representam desvio padrão 1σ de cada cluster._
+_Scatter plot 2D com 2.505 pontos coloridos por cluster: Cluster 0 (azul, n=687), Cluster 1 (vermelho, n=534), Cluster 2 (verde, n=621), Cluster 3 (amarelo, n=663). Centroides marcados com 'X' preto. Elipses representam 1 desvio padrão de cada cluster._
 
 **Tabela 4. Caracterização Estatística dos Clusters Identificados**
 
@@ -394,7 +379,7 @@ _Scatter plot 2D com 2.505 pontos coloridos por cluster: Cluster 0 (azul, n=687)
 
 **Análise Qualitativa dos Regimes de Mercado**:
 
-- **Cluster 0 (27,4% das observações)**: Regime de mercado neutro com baixa volatilidade (σ=1,87%), típico de períodos sideways sem tendência definida. RSI próximo a 50 indica equilíbrio entre compradores e vendedores.
+- **Cluster 0 (27,4% das observações)**: Regime de mercado neutro com baixa volatilidade (1,87%), típico de períodos sideways sem tendência definida. RSI próximo a 50 indica equilíbrio entre compradores e vendedores.
 
 - **Cluster 1 (21,3%)**: Bull market ativo - retorno médio positivo de 2,87% com alta volatilidade (7,23%). RSI > 60 sinaliza força compradora. Corresponde a rallies de 2020-2021 (DeFi summer, ETH 2.0).
 
@@ -495,7 +480,7 @@ Dois modelos comparados: Random Forest Regressor (principal) vs. Linear Regressi
 
 **Figura 9. Série Temporal: Preços Reais vs. Previsões (Random Forest)**
 
-_Gráfico de linha temporal (501 dias de teste, 07/2024-12/2025). Linha azul sólida: preços reais; linha vermelha tracejada: previsões RF. Sombreamento cinza: intervalo de confiança 95% (±2σ residual). Círculos amarelos marcam desvios >$150 em eventos extremos (n=8)._
+_Gráfico de linha temporal (501 dias de teste, 07/2024-12/2025). Linha azul sólida: preços reais; linha vermelha tracejada: previsões RF. Sombreamento cinza: intervalo de confiança 95% (±2 desvios padrão residual). Círculos amarelos marcam desvios >$150 em eventos extremos (n=8)._
 
 **Observações Visuais**: Modelo acompanha fielmente tendências de alta (Q3-Q4/2024) e correções (Q1/2025), com lag médio de 1,2 dias em reversões abruptas. Maiores desvios concentram-se em:
 
@@ -505,30 +490,30 @@ _Gráfico de linha temporal (501 dias de teste, 07/2024-12/2025). Linha azul só
 
 **Figura 10. Scatter Plots: Valores Preditos vs. Observados**
 
-_Dois painéis lado a lado: (esquerda) RF com pontos azuis concentrados próximos à diagonal y=x tracejada preta, ρ=0,9701, R²=0,9412; (direita) LR com maior dispersão, ρ=0,9336, R²=0,8721. Densidade de pontos maior em faixa $1.500-$3.000 (quartis centrais da distribuição histórica)._
+_Dois painéis lado a lado: (esquerda) RF com pontos azuis concentrados próximos à diagonal y=x tracejada preta, r=0,9701, R²=0,9412; (direita) LR com maior dispersão, r=0,9336, R²=0,8721. Densidade de pontos maior em faixa $1.500-$3.000 (quartis centrais da distribuição histórica)._
 
-Correlação de Pearson RF (ρ=0,9701) vs. LR (ρ=0,9336) quantifica superioridade visual. Pontos no RF alinham-se quase perfeitamente com diagonal ideal.
+Correlação de Pearson RF (r=0,9701) vs. LR (r=0,9336) quantifica superioridade visual. Pontos no RF alinham-se quase perfeitamente com diagonal ideal.
 
 **Análise de Resíduos**:
 
 **Figura 11. Distribuição de Resíduos (Erros de Predição)**
 
-_Histograma (40 bins) com curva de densidade KDE sobreposta (linha vermelha). Distribuição aproximadamente normal: μ=−$2,34 (leve viés de subestimação), σ=$87,23. Q-Q plot no insert: pontos seguem linha teórica exceto caudas (fat tails). Teste Shapiro-Wilk: W=0,9823, p=0,082 (não rejeita normalidade em α=0,05)._
+_Histograma (40 bins) com curva de densidade KDE sobreposta (linha vermelha). Distribuição aproximadamente normal: média=−$2,34 (leve viés de subestimação), desvio padrão=$87,23. Q-Q plot no insert: pontos seguem linha teórica exceto caudas (fat tails). Teste Shapiro-Wilk: W=0,9823, p=0,082 (não rejeita normalidade em nível de significância de 0,05)._
 
 **Interpretação de Resíduos**:
 
-- **Média μ=−$2,34**: Viés sistemático mínimo (0,09% do preço médio), praticamente desprezível.
-- **Desvio padrão σ=$87,23**: Consistente com RMSE=$89,47, confirmando homoscedasticidade aproximada.
-- **Normalidade**: Shapiro-Wilk (p=0,082) não rejeita H₀ em α=0,05, validando pressupostos de OLS para inferência estatística.
-- **Fat tails**: Leve excesso de curtose (κ=1,87) indica erros ocasionalmente extremos, alinhado com natureza do mercado cripto.
+- **Média = −$2,34**: Viés sistemático mínimo (0,09% do preço médio), praticamente desprezível.
+- **Desvio padrão = $87,23**: Consistente com RMSE=$89,47, confirmando homoscedasticidade aproximada.
+- **Normalidade**: Shapiro-Wilk (p=0,082) não rejeita hipótese nula em nível de significância de 0,05, validando pressupostos de OLS para inferência estatística.
+- **Fat tails**: Leve excesso de curtose (1,87) indica erros ocasionalmente extremos, alinhado com natureza do mercado cripto.
 
 **Heterocedasticidade Condicional**:
 
 **Figura 12. Resíduos Absolutos vs. Volatilidade Realizada**
 
-_Scatter plot mostrando |resíduo| no eixo y vs. volatilidade_7d no eixo x. Tendência linear positiva visível (ρ=0,524), confirmando que erros aumentam em períodos voláteis._
+_Scatter plot mostrando valor absoluto do resíduo no eixo y vs. volatilidade_7d no eixo x. Tendência linear positiva visível (r=0,524), confirmando que erros aumentam em períodos voláteis._
 
-Correlação positiva (ρ=0,524, p<0,001) entre magnitude de erro e volatilidade confirma heterocedasticidade condicional: modelo tem maior incerteza (erros maiores) quando mercado está agitado. Comportamento esperado e desejável, pois reflete incerteza genuína do ambiente
+Correlação positiva (r=0,524, p<0,001) entre magnitude de erro e volatilidade confirma heterocedasticidade condicional: modelo tem maior incerteza (erros maiores) quando mercado está agitado. Comportamento esperado e desejável, pois reflete incerteza genuína do ambiente
 
 ## 5. Conclusão
 
